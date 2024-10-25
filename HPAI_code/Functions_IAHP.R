@@ -19,14 +19,8 @@ prepareData<-function(file){
   #Eliminate the observation with production type with "NA"
   
   WAVE1_ALL<- subset(wave1_all, Production_type != "NA")
+  names(WAVE1_ALL)[names(WAVE1_ALL) == "Distance_ZRP_Category"] <- "Distance_PRZ_Category"
   
-  # # Create a temporary variable to hold updated values
-  # updated_category <- ifelse(WAVE1_ALL$distance_PRZ == 0.000, "Inside",
-  #                            ifelse(WAVE1_ALL$distance_PRZ > 0 & WAVE1_ALL$distance_PRZ <= 2, "Neighbouring",
-  #                                   ifelse(WAVE1_ALL$distance_PRZ > 2, "Outside", "unknown")))
-  # 
-  # # Assign the updated values to Distance_PRZ_Category
-  # WAVE1_ALL$Distance_PRZ_Category <- updated_category
  
   # Replace NAs for DistCases_7days with 1000km
   
@@ -40,18 +34,21 @@ prepareData<-function(file){
 
 # Clustering and descriptive analysis -------------------------------------
 
-##clustering1 is a function that checks for clusters among  a subset of the dataset in a specific scenarios (3 scenarios A, B and C)
-## It returns a list of six outputs
+##clustering1 is a function that checks for clusters among  a subset of the dataset in a specific scenarios (2 scenarios A and B)
+## It returns a list of 9 outputs
 # 1. Descriptive analysis of explanatory variables - Environmental variables only
 # 2. Silhouette plot
 # 3. Cluster plot (cloud)
 # 4. Full Data with clustering 
 # 5. Specific scenario dataset with clustering
-# 6. Maps. 
+# 6. Maps
+# 7. Describe Distance_PRZ_Category et DistCases_7days, DistCases_coast 
+#8. Describe NB_Farms, NB_Farms+W and NB_Farms-W 
+# 9.  Describe describe the rest 
 
 clustering1 <-function(data,index2remove,Scenario){
   data <- as.data.frame(data)
-  # clusters Scenario A with only type, Species and production type
+  
   data$Distance_PRZ_Category<-as.factor(data$Distance_PRZ_Category)
   ProceedData <- data[, -index2remove]
   
@@ -102,58 +99,64 @@ clustering1 <-function(data,index2remove,Scenario){
     setNames(c("X", "Y")) %>%
     mutate(cluster = factor(pam_fit$clustering))
   
-  # Create the plot 
-  cloud <- ggplot(tsne_data, aes(x = X, y = Y)) +
-    geom_point(aes(color = cluster))+ ggtitle(paste(Scenario))+  
-    theme(plot.title = element_text(hjust = 0, vjust = 1))
   
+  # Define the colors for each cluster (consistent across both plots)
+  my_colors <- RColorBrewer::brewer.pal(n = 8, name = "Set2")
+  
+  # Create the 2D cloud plot
+  cloud <- ggplot(tsne_data, aes(x = X, y = Y)) +
+    geom_point(aes(color = factor(cluster))) + 
+    scale_color_manual(values = my_colors) + 
+    ggtitle(paste(Scenario)) +  
+    theme(plot.title = element_text(hjust = 0, vjust = 1))+
+    labs(color = "Cluster")
   
   # Save the info from tmp
-  tmp<-data
-  #  Add the cluster info into the dataset with the localisation info
+  tmp <- data
+  
+  # Add the cluster info into the dataset with the localization info
   tmp$cluster <- ProceedData$cluster
   
-  ## Cluster visualisation 
   # Convert the outbreak data to a data frame
   cases_df <- as.data.frame(tmp)
   
-  # Define the colors for each cluster
-  my_colors <- plasma(k)
-  
-  # Create a color vector for the clusters and initialize the cluster_colors vector with NAs
-  cases_df$cluster_colors <- rep(NA, nrow(cases_df))
-  
-  for (i in 1:k){
-    cases_df$cluster_colors[cases_df$cluster == i] <- my_colors[i]
-  }
-  
-  # create the map with the outbreaks in different colors according to the cluster
-  
+  # Assign the colors for each cluster based on `my_colors`
+  cases_df$cluster_colors <- my_colors[cases_df$cluster]
+  # 
+  # Create the map with the outbreaks in different colors according to the cluster
   maptheme <- theme(panel.grid = element_blank()) +
     theme(axis.text = element_blank()) +
     theme(axis.ticks = element_blank()) +
     theme(axis.title = element_blank()) +
     theme(legend.position = "none") +
-    theme(panel.grid = element_blank()) +
     theme(panel.background = element_rect(fill = "lightblue")) +
-    theme(plot.margin = unit(c(0, 0, 00, 0), 'cm'))
+    theme(plot.margin = unit(c(0, 0, 0, 0), 'cm'))
   
-  mapcoords <- coord_fixed()
+  #Shapefile downlodable on gadm.org
   
-  Fr= map_data('france')
+  Fr <- st_read("X:/Maryem_MIASE/1.Data/2022-2023/gadm41_FRA_1.shp")
 
-  country_shapes_all <- geom_polygon(data = Fr, aes(x = long, y = lat, group = group),
-                                     fill = "white", color = "black", size = 0.3)
-
-  Map <-ggplot() + country_shapes_all + maptheme +
-    geom_point(data = cases_df, aes(x = `Long`, y = `Lat`, color = cluster_colors), size = 3) + 
-    scale_color_identity() + 
-    ggtitle(paste(Scenario)) + 
-    coord_fixed(ratio = 1)
   
- ##Descriptive analysis of explanatory variables - Environmental  variables only
+  # Boundries of France
+  country_shapes_all <- geom_sf(data = Fr, fill = "white", color = "black", size = 0.3)
+  
+  #  Map with outbreaks
+  Map <- ggplot() +
+    country_shapes_all +
+    maptheme +
+    geom_point(data = cases_df, aes(x = Long, y = Lat, color = cluster_colors), size = 1) +
+    scale_color_identity() +
+    ggtitle(paste(Scenario)) +
+    coord_sf(crs = st_crs(Fr))+
+    theme(aspect.ratio = 1)
+  
+  ##Descriptive analysis of explanatory variables - Environmental  variables only
   
   VariablesViz<-NULL
+  VariablesViz1 <- NULL
+  VariablesViz2 <- NULL
+  VariablesViz3 <- NULL
+  
   if (ncol(ProceedData)>4){
     a0=ggplot(cases_df,aes(x=Distance_PRZ_Category))+
       geom_bar(stat = 'count', fill = "lightblue")+
@@ -166,16 +169,16 @@ clustering1 <-function(data,index2remove,Scenario){
     b=ggplot(cases_df,aes(x=as.factor(cluster),y=DistCases_Litt))+
       geom_boxplot()+
       geom_jitter(colour='lightblue',alpha=0.5)+
-      xlab("cluster")+ylab("Dist. Littoral")
+      xlab("cluster")+ylab("Dist. Coast")
     c=ggplot(cases_df,aes(x=as.factor(cluster),y=DistCases_watSurf))+
       geom_boxplot()+geom_jitter(colour='lightblue',alpha=0.5)+
       xlab("cluster")+ylab("Dist. Water Surf.")
     d=ggplot(cases_df,aes(x=as.factor(cluster),y=NB_WatSurf))+
       geom_boxplot()+geom_jitter(colour='lightblue',alpha=0.5)+
-      xlab("cluster")+ylab("Nb. Water Surf")
+      xlab("cluster")+ylab("Nb. Water Surf.")
     e=ggplot(cases_df,aes(x=as.factor(cluster),y=PR_WatSurf))+
       geom_boxplot()+geom_jitter(colour='lightblue',alpha=0.5)+
-      xlab("cluster")+ylab("Water Surf Cover")
+      xlab("cluster")+ylab("Water Surf. Cover")
     f=ggplot(cases_df,aes(x=as.factor(cluster),y=NB_Farms))+
       geom_boxplot()+geom_jitter(colour='lightblue',alpha=0.5)+
       xlab("cluster")+ylab("Nb. Farms")
@@ -190,17 +193,93 @@ clustering1 <-function(data,index2remove,Scenario){
       xlab("cluster")+ylab("Nb Roads")
     j=ggplot(cases_df,aes(x=as.factor(cluster),y=Roads_length))+
       geom_boxplot()+geom_jitter(colour='lightblue',alpha=0.5)+
-      xlab("cluster")+ylab("Road length")
+      xlab("cluster")+ylab("Road Length")
     k=ggplot(cases_df,aes(x=as.factor(cluster),y=Distance_roads))+
       geom_boxplot()+geom_jitter(colour='lightblue',alpha=0.5)+
       xlab("cluster")+ylab("Dist. Roads")
     
     VariablesViz<-grid.arrange(a0,a,b,c,d,e,f,g,h,i,j,k, ncol=3)
+    
+    
+    
+    VariablesViz1 <- grid.arrange(a0,a,b, ncol=1)
+    VariablesViz2 <- grid.arrange(f,g,h, ncol=1)
+    VariablesViz3 <- grid.arrange(c,d,e,i,j,k, ncol=3)
   }
   
+  if (ncol(ProceedData) > 4) {
+    # First set of plots
+    a0 = ggplot(cases_df, aes(x = Distance_PRZ_Category)) +
+      geom_bar(stat = 'count', fill = "lightblue") +
+      facet_wrap(~ as.factor(cluster), scales = "free") +
+      xlab("Dist. To PRZ") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    a = ggplot(cases_df, aes(x = as.factor(cluster), y = DistCases_7days)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Dist. Case")
+    
+    b = ggplot(cases_df, aes(x = as.factor(cluster), y = DistCases_Litt)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Dist. Coast")
+    
+    VariablesViz1 <- grid.arrange(a0, a, b, ncol = 1)
+    
+    # Second set of plots
+    f = ggplot(cases_df, aes(x = as.factor(cluster), y = NB_Farms)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Nb. Farms")
+    
+    g = ggplot(cases_df, aes(x = as.factor(cluster), y = NB_FarmsP)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Nb Farms +W")
+    
+    h = ggplot(cases_df, aes(x = as.factor(cluster), y = NB_FarmsNP)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Nb Farms -W")
+    
+    VariablesViz2 <- grid.arrange(f, g, h, ncol = 1)
+    
+    # Third set of plots
+    c = ggplot(cases_df, aes(x = as.factor(cluster), y = DistCases_watSurf)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Dist. Water Surf.")
+    
+    d = ggplot(cases_df, aes(x = as.factor(cluster), y = NB_WatSurf)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Nb. Water Surf.")
+    
+    e = ggplot(cases_df, aes(x = as.factor(cluster), y = PR_WatSurf)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Water Surf. Cover")
+    
+    i = ggplot(cases_df, aes(x = as.factor(cluster), y = Nb_roads)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Nb Roads")
+    
+    j = ggplot(cases_df, aes(x = as.factor(cluster), y = Roads_length)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Road Length")
+    
+    k = ggplot(cases_df, aes(x = as.factor(cluster), y = Distance_roads)) +
+      geom_boxplot() +
+      geom_jitter(colour = 'lightblue', alpha = 0.5) +
+      xlab("cluster") + ylab("Dist. Roads")
+    
+    VariablesViz3 <- grid.arrange(c, d, e, i, j, k, ncol = 2)
+  }
   
   assign(paste0("outputs_Scen",Scenario),
-         list(VariablesViz,SilPlot,cloud, ProceedData,tmp,Map))
+         list(VariablesViz,SilPlot,cloud, ProceedData,tmp,Map,VariablesViz1,VariablesViz2,VariablesViz3))
   return(eval(parse(text=paste0("outputs_Scen",Scenario))))
 }
 
@@ -210,31 +289,44 @@ clustering1 <-function(data,index2remove,Scenario){
 
 ##FarmChar is a function that describes the distribution of the farm characteristics
 ##among the different clusters
+# 
 
-FarmChar<-function(data){
-  data$Production_type2=toupper(abbreviate(ScenB[[4]]$Production_type))
-  data$Species2=toupper(abbreviate(ScenB[[4]]$Species))
-  data$Type2=toupper(abbreviate(ScenB[[4]]$Type))
-  data$Species2[data$Species=='Multi-Species with waterfowl']="MS+W"
-  data$Species2[data$Species=='Multi-Species without waterfowl']="MS-W"
+FarmChar <- function(data) {
   
+  data$Production_type2 <- toupper(abbreviate(data$Production_type))
+  data$Species2 <- toupper(abbreviate(data$species))
+  data$Type2 <- toupper(abbreviate(data$Type))
   
-  a0=ggplot(data,aes(x=Type2))+geom_bar(stat = 'count', fill = "lightblue")+
-    facet_wrap( ~ as.factor(cluster) , scales="free")+
+  # Vérifier et assigner les valeurs conditionnelles pour `Species2`
+  if ("Multi-species with waterfowl" %in% data$species) {
+    data$Species2[data$species == 'Multi-species with waterfowl'] <- "MS+W"
+  }
+  
+  if ("Multi-species without waterfowl" %in% data$species) {
+    data$Species2[data$species == 'Multi-species without waterfowl'] <- "MS-W"
+  }
+  
+  # graphs
+  a0 <- ggplot(data, aes(x = Type2)) + geom_bar(stat = 'count', fill = "lightblue") +
+    facet_wrap(~ as.factor(cluster), scales = "free") +
     xlab("Type") +
-    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-  a=ggplot(data,aes(x=Production_type2))+geom_bar(stat = 'count', fill = "lightblue")+
-    xlab("Production_type")+
-    facet_wrap( ~ as.factor(cluster) , scales="free")+
-    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
-  b=ggplot(data,aes(x=Species2))+geom_bar(stat = 'count', fill = "lightblue")+
-    facet_wrap( ~ as.factor(cluster) , scales="free")+
-    xlab("Species")+
-    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
   
-  HC_plot<-grid.arrange(a0,a,b, nrow=2)
-  HC_plot<-arrangeGrob(arrangeGrob(a0,a, ncol=1), b, ncol=2, widths=c(1,1))
+  a <- ggplot(data, aes(x = Production_type2)) + geom_bar(stat = 'count', fill = "lightblue") +
+    xlab("Production_type") +
+    facet_wrap(~ as.factor(cluster), scales = "free") +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+  
+  b <- ggplot(data, aes(x = Species2)) + geom_bar(stat = 'count', fill = "lightblue") +
+    facet_wrap(~ as.factor(cluster), scales = "free") +
+    xlab("Species") +
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+  
+  
+  HC_plot <- grid.arrange(a0, a, b, nrow = 2)
+  HC_plot <- arrangeGrob(arrangeGrob(a0, a, ncol = 1), b, ncol = 2, widths = c(1, 1))
   plot(HC_plot)
+  
   return(HC_plot)
 }
 --------------------------------------------------------------------------------
@@ -245,75 +337,82 @@ FarmChar<-function(data){
   
 # Applying random forest to evaluate variable importance in clustering ----------
 
-## RandForA is a function that applies a random forest algorithm and examines 
+## RandForA_heatmap_combined is a function that applies a random forest algorithm and examines 
 ##variable importance through the mean decrease of accuracy
-
   
-  RandForA <- function(data) {
-    tmp <- prepareData("./Data/fictive_database.xlsx")
-    # dataOrigin <- tmp[,-c(1:3, 7, 19)]
-    dataOrigin <- tmp %>% select(-c(1:3, 7, 19))
-    
+RandForA_heatmap_combined <- function(data_scenario1, data_scenario2) {
+ 
+  compute_importance <- function(data, scenario_name) {
     set.seed(123)
     data$cluster <- as.factor(data$cluster)
     
     # RF model explaining clusters using other variables
     resrf <- randomForest(cluster ~ ., data = data, ntree = 500, localImp = TRUE)
-    # print the model summary
-    print(resrf)  
-    Namescolumns <- setdiff(colnames(dataOrigin), "cluster")
+    
     # Variable importance using decrease in accuracy
     var_importance <- data.frame(variable = setdiff(colnames(data), "cluster"),
-                                 importance = as.vector(importance(resrf)[, "MeanDecreaseAccuracy"]))
+                                 importance = as.vector(importance(resrf)[, "MeanDecreaseAccuracy"]),
+                                 scenario = scenario_name)
     
-    # Replace NA values with 0 
     var_importance$importance[is.na(var_importance$importance)] <- 0
-    # Add a small constant to ensure all bars are displayed
     var_importance$importance <- ifelse(var_importance$importance == 0, 1e-10, var_importance$importance)
-    # Arrange and factor levels for variables
-    var_importance <- arrange(var_importance, desc(importance))
-    var_importance$variable <- factor(var_importance$variable, levels = var_importance$variable)
-    
-    # Rename variables for better readability
-    levels(var_importance$variable)[levels(var_importance$variable) == "Production_type"] <- "Production Type"
-    levels(var_importance$variable)[levels(var_importance$variable) == "DistCases_7days"] <- "Dist. Case"
-    levels(var_importance$variable)[levels(var_importance$variable) == "DistCases_Litt"] <- "Dist. Coast"
-    levels(var_importance$variable)[levels(var_importance$variable) == "DistCases_watSurf"] <- "Dist. Water Surf."
-    levels(var_importance$variable)[levels(var_importance$variable) == "NB_WatSurf"] <- "Nb. Water Surf."
-    levels(var_importance$variable)[levels(var_importance$variable) == "PR_WatSurf"] <- "Water Surf. Cover"
-    levels(var_importance$variable)[levels(var_importance$variable) == "NB_Farms"] <- "Nb. Farms"
-    levels(var_importance$variable)[levels(var_importance$variable) == "NB_FarmsP"] <- "Nb. Farms +W"
-    levels(var_importance$variable)[levels(var_importance$variable) == "NB_FarmsNP"] <- "Nb. Farms -W"
-    levels(var_importance$variable)[levels(var_importance$variable) == "Nb_roads"] <- "Nb. Roads"
-    levels(var_importance$variable)[levels(var_importance$variable) == "Roads_length"] <- "Road Length"
-    levels(var_importance$variable)[levels(var_importance$variable) == "Distance_roads"] <- "Dist. Roads"
-    levels(var_importance$variable)[levels(var_importance$variable) == "distance_ZRP"] <- "Dist. To PRZ"
-    levels(var_importance$variable)[levels(var_importance$variable) == "Distance_PRZ_Category"] <- "Dist. To PRZ"
-    
-    # Ensure all variables in var_importance have colors assigned
-    complete_palette <- global_palette[match(levels(var_importance$variable), names(global_palette))]
-    
-    # Plot
-    p <- ggplot(var_importance, aes(x = variable, y = importance, fill = variable)) + 
-      geom_bar(stat = "identity") + 
-      scale_fill_manual(values = complete_palette) + 
-      scale_x_discrete(drop = FALSE) + 
-      theme_minimal() + 
-      theme(
-        axis.title = element_blank(), 
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(), 
-        axis.text.y = element_text(size = 12), 
-        axis.ticks.y = element_line(), 
-        legend.position = "right", 
-        legend.title = element_text(size = 10), 
-        legend.text = element_text(size = 10) 
-      ) +
-      labs(fill = "Variable") + 
-      expand_limits(y = c(min(var_importance$importance), max(var_importance$importance))) 
-   
-    return(p)
+    return(var_importance)
   }
+  
+  # Compute importance for both scenarios
+  importance_scenario1 <- compute_importance(data_scenario1, "Scenario A")
+  importance_scenario2 <- compute_importance(data_scenario2, "Scenario B")
+  
+  # Combine both scenarios into one dataframe
+  importance_combined <- rbind(importance_scenario1, importance_scenario2)
+  
+  # Eliminate  duplicated columns
+  if(any(duplicated(names(importance_combined)))) {
+    stop("Erreur : duplicated columns detected")
+  }
+  
+  # Verify columns' names are correct
+  print(names(importance_combined))
+  
+  # Rename variables
+  importance_combined$variable <- as.character(importance_combined$variable)
+  importance_combined$variable[importance_combined$variable == "Production_type"] <- "Production Type"
+  importance_combined$variable[importance_combined$variable == "DistCases_7days"] <- "Dist. Case"
+  importance_combined$variable[importance_combined$variable == "DistCases_Litt"] <- "Dist. Coast"
+  importance_combined$variable[importance_combined$variable == "DistCases_watSurf"] <- "Dist. Water Surf."
+  importance_combined$variable[importance_combined$variable == "NB_WatSurf"] <- "Nb. Water Surf."
+  importance_combined$variable[importance_combined$variable == "PR_WatSurf"] <- "Water Surf. Cover"
+  importance_combined$variable[importance_combined$variable == "NB_Farms"] <- "Nb. Farms"
+  importance_combined$variable[importance_combined$variable == "NB_FarmsP"] <- "Nb. Farms +W"
+  importance_combined$variable[importance_combined$variable == "NB_FarmsNP"] <- "Nb. Farms -W"
+  importance_combined$variable[importance_combined$variable == "Nb_roads"] <- "Nb. Roads"
+  importance_combined$variable[importance_combined$variable == "Roads_length"] <- "Road Length"
+  importance_combined$variable[importance_combined$variable == "Distance_roads"] <- "Dist. Roads"
+  importance_combined$variable[importance_combined$variable == "distance_ZRP"] <- "Dist. To PRZ"
+  importance_combined$variable[importance_combined$variable == "Distance_PRZ_Category"] <- "Dist. To PRZ"
+  
+  # Convert scenario and variable to factors 
+  importance_combined$scenario <- as.factor(importance_combined$scenario)
+  importance_combined$variable <- factor(importance_combined$variable, levels = unique(importance_combined$variable))
+  
+  # Create the heatmap
+  p <- ggplot(importance_combined, aes(x = scenario, y = variable, fill = importance)) +
+    geom_tile(color = "white") +  
+    scale_fill_gradient(low = "white", high = "orange") +  
+    theme_minimal() + 
+    theme(
+      panel.background = element_blank(),
+      axis.title = element_blank(),
+      axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+      axis.text.y = element_text(size = 12),
+      axis.ticks = element_blank(),
+      legend.title = element_text(size = 10),
+      legend.text = element_text(size = 10)
+    ) +
+    labs(fill = "Importance")  
+  
+  return(p)
+}
   
   
 --------------------------------------------------------------------------------  

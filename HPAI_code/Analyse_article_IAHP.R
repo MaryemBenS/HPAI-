@@ -66,12 +66,12 @@ library(patchwork)
 
 #set work diractory 
 
-setwd ("C:/Users/m.bensalem/Documents/HPAI_22_23_Git")
+setwd ("C:/Users/m.bensalem/Documents/HPAI_code_git/HPAI-/HPAI_code")
 
 
 #### Data preparation ----------------------------------------------------------
 
-WAVE1_ALL<-prepareData("./Data/fictive_database.xlsx")
+WAVE1_ALL<-prepareData("fictive_database.xlsx")
 
 ##This data is fictive. Outbreak location were sampled so no real outbreak location were kept.
 ##The aim of this data set is to show the layout of the data set and to be able to run the code. 
@@ -84,7 +84,7 @@ WAVE1_ALL<-prepareData("./Data/fictive_database.xlsx")
 ##Barplot
 
 # Transform the data column to a date format
-WAVE1_ALL$Outbreak_date  <- as.Date(WAVE1_ALL$Outbreak_date , format = "%Y-%m-%d") 
+WAVE1_ALL$Outbreak_date <- as.Date(WAVE1_ALL$Outbreak_date)
 
 # Define the separation date
 seper <- as.Date('2022-08-01')
@@ -134,36 +134,36 @@ print(g)
 
 ## visualize with a map the 2 waves
 
-# Prepare map data
-Fr <- map_data('france')
+# Prepare map data: shapefile is downloadable from gadm.org
+
+france_shapefile <- st_read("X:/Maryem_MIASE/1.Data/2022-2023/gadm41_FRA_1.shp")
 
 # Define the map theme and coordinates
-maptheme <- theme(panel.grid = element_blank()) +
-  theme(axis.text = element_blank()) +
-  theme(axis.ticks = element_blank()) +
-  theme(axis.title = element_blank()) +
-  theme(legend.position = "none") + # Hide the legend
-  theme(panel.grid = element_blank()) +
-  theme(panel.background = element_rect(fill = "lightgrey")) +
-  theme(plot.margin = unit(c(0, 0, 0, 0), 'cm'),
-        aspect.ratio = 1)
+maptheme <- theme(panel.grid = element_blank(),
+                  axis.text = element_blank(),
+                  axis.ticks = element_blank(),
+                  axis.title = element_blank(),
+                  legend.position = "none",
+                  panel.background = element_rect(fill = "lightgrey"),
+                  plot.margin = unit(c(0, 0, 0, 0), 'cm'),
+                  aspect.ratio = 1)
 
-mapcoords <- coord_fixed(ratio = 1)
+mapcoords <- coord_sf()
 
 # Define country shapes
-country_shapes_all <- geom_polygon(data = Fr, aes(x = long, y = lat, group = group),
-                                   fill = "white", color = "black", size = 0.3)
+country_shapes_all <- geom_sf(data = france_shapefile, fill = "white", color = "black", size = 0.3)
 
 # Plot the map
 Map <- ggplot() + 
   country_shapes_all + 
   maptheme +
-  geom_point(data = Full_data1, aes(x = Long, y = Lat, color = Wave), size = 3) + 
-  scale_color_manual(values = c("Wave 1" = "orange", "Wave 2" = "lightblue")) + 
+  geom_point(data = Full_data1, aes(x = Long, y = Lat, color = Wave), size = 2) + 
+  scale_color_manual(values = c("Wave 1" = "orange", "Wave 2" = "powderblue")) + 
   mapcoords
 
 # Display the map
 print(Map)
+
 
 
 #create one graph with both the map and the bar plot
@@ -187,53 +187,82 @@ plot(WAVES)
 
 ##Using the clustering function to check clusters for different scenarios 
 
-#Scenario A with just the farm characteristics
-ScenA<-clustering1(data = WAVE1_ALL,index2remove = c(1:3, 7:20), Scenario = "A")
 
-#Scenario B with all variables (farm and environmental)
-ScenB<-clustering1(data = WAVE1_ALL,index2remove = c(1:3, 7,19), Scenario = "B")
+#Scenario A with all variables (farm and environmental)
+ScenA<-clustering1(data = WAVE1_ALL,index2remove = c(1:3, 7,19), Scenario = "A")
 
-#Scenario C with just the environmental variables
-ScenC<-clustering1(data = WAVE1_ALL,index2remove = c(1:7, 19), Scenario = "C")
+#Scenario B with just the environmental variables
+ScenB<-clustering1(data = WAVE1_ALL,index2remove = c(1:7, 19), Scenario = "B")
 
-#Visualize the silhouette plot for the 3 scenarios
+#Visualize the silhouette plot for the 2 scenarios
 
-b <- arrangeGrob(ScenA[[2]],ScenB[[2]],ScenC[[2]], ncol=3, 
-                 widths=c(1,1,1))
+b <- arrangeGrob(ScenA[[2]],ScenB[[2]], ncol=2, 
+                 widths=c(1,1))
 plot(b)
 
 
-#Visualize the clusters plot for the 3 scenarios
+#Visualize the clusters plot for the 2 scenarios
 
-c <- arrangeGrob(ScenA[[3]],ScenB[[3]],ScenC[[3]], ncol=3, 
-                 widths=c(1,1,1))
+c <- arrangeGrob(ScenA[[3]],ScenB[[3]], ncol=2, 
+                 widths=c(1,1))
 plot(c)
 
 
-#Visualize the clusters maps for the 3 scenarios
-x <- arrangeGrob(ScenA[[6]],ScenB[[6]],ScenC[[6]], ncol=3, 
-                 widths=c(1,1,1))
+#Visualize the clusters maps for the 2 scenarios
+x <- arrangeGrob(ScenA[[6]],ScenB[[6]], ncol=2, 
+                 widths=c(1,1))
 plot(x)
 
 
-##Using the FarmChar function to describe the farm characteristics for 
-##senario A and B 
+# Visualize plot +map for scenario A
+
+xx <- arrangeGrob(ScenA[[6]],ScenA[[3]], ncol=2, 
+                  widths=c(1,1))
+plot(xx)
+
+
+
+# Visualize plot +map for scenario B
+
+xx1 <- arrangeGrob(ScenB[[6]],ScenB[[3]], ncol=2, 
+                   widths=c(1,1))
+plot(xx1)
+
+#Visualize  plot +map for 2 scenarios A and B
+
+cx1 <- arrangeGrob(xx,xx1, ncol = 1)
+plot(cx1)
+
+
+
+
+#describe Distance_PRZ_Category et DistCases_7days, DistCases_coast in scenario A
+
+grid.draw(ScenA[[7]])
+
+
+#describe NB_Farms, NB_Farms+W and NB_Farms-W in scenario A
+grid.draw(ScenA[[8]])
+
+#describe the rest in A
+
+grid.draw(ScenA[[9]])
+
+#describe Distance_PRZ_Category et DistCases_7days, DistCases_coast in scenario B
+grid.draw(ScenB[[7]])
+
+#describe NB_Farms, NB_Farms+W and NB_Farms-W in scenario B
+grid.draw(ScenB[[8]])
+
+#describe the rest in B
+grid.draw(ScenB[[9]])
+
+
+
+##Using the FarmChar function to describe the farm characteristics for scenario A
 
 HC_ScenA<-FarmChar(ScenA[[4]])
-HC_ScenB<-FarmChar(ScenB[[4]])
 
-
-
-#For Scenario B  descriptive all variables
-
-t <- arrangeGrob(ScenB[[1]],HC_ScenB, ncol=2, 
-                 widths=c(1,1))
-plot(t)
-
-#For scenario C 
-
-v <- arrangeGrob(ScenC[[1]])
-plot(v)
 
 --------------------------------------------------------------------------------
 
@@ -243,76 +272,10 @@ plot(v)
 
 ##Using the RandForA forest to evaluate variable importance for the different scenarios
 
-# Define a global color palette with 15 distinct colors using randomcoloR 
-#a color for each variable
-global_palette <- setNames(distinctColorPalette(15), c(
-  "Production Type", "Dist. Case", "Dist. Coast", "Dist. Water Surf.",
-  "Nb. Water Surf.", "Water Surf. Cover", "Nb. Farms", "Nb. Farms +W",
-  "Nb. Farms -W", "Nb. Roads", "Road Length", "Dist. Roads",
-  "Dist. To PRZ", "Species", "Type"
-))
-
-
-RFA_ScenA<-RandForA(ScenA[[4]])+ ggtitle("A")
-RFA_ScenB<-RandForA(ScenB[[4]])+ ggtitle("B")
-RFA_ScenC<-RandForA(ScenC[[4]])+ ggtitle("C")
-
-
-A <- arrangeGrob(arrangeGrob(RFA_ScenA),arrangeGrob(RFA_ScenB,RFA_ScenC, ncol=1)
-                    ,ncol=2, 
-                    widths=c(1,1))
-plot(A)
-
-##Create a one plot with global labels and title
-
-# Remove individual legends
-AA <- RFA_ScenA + theme(legend.position = "none")
-BA <- RFA_ScenB + theme(legend.position = "none")
-CA <- RFA_ScenC + theme(legend.position = "none")
-
-
-# Combine the plots
-combined_plot <- (AA + RFA_ScenB + CA) +
-  plot_layout(ncol = 3, guides = "collect")
-
-# Add global labels and title
-combined_plot <- combined_plot +
-  plot_annotation(
-    title = "Variable Importance from Random Forest Fit",
-    theme = theme(
-      plot.title = element_text(hjust = 0.5, size = 16),
-      axis.title.x = element_text(size = 14),
-      axis.title.y = element_text(size = 14)
-    )
-  ) 
-
-
-# Create a replica plot for the vertical caption
-vertical_caption <- ggplot() + 
-  annotate("text", x = 1, y = 1, label = "Variable Importance \n(Mean Decrease in Accuracy)", 
-           angle = 90, size = 5, hjust = 0.5) +
-  theme_void()
-
-# Combine the vertical caption with the combined plot
-final_plot <- (vertical_caption | combined_plot) +
-  plot_layout(widths = c(1, 10)) +
-  plot_annotation(
-    title = "Variable Importance from Random Forest Fit",
-    caption = "Farm and Environmental characteristics",
-    theme = theme(
-      plot.title = element_text(size = 16, hjust = 0.5),
-      axis.title.x = element_text(size = 14, hjust = 0.5),
-      plot.caption = element_text(size = 14, hjust = 0.5, vjust = 1),
-      axis.title.y = element_blank()  # 
-      
-    )
-  ) & 
-  labs(
-    x = "Farm and Environmental characteristics"
-  )
-
-# Display the combined plot
-print(final_plot)
+p <- RandForA_heatmap_combined(ScenA[[4]], ScenB[[4]])+ 
+  ggtitle("Variable Importance from Random Forest Fit")+
+  theme(plot.title = element_text(hjust = 0.5))
+print(p)
 
 
 --------------------------------------------------------------------------------
